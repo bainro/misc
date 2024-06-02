@@ -239,3 +239,82 @@ if __name__ == "__main__":
     
     print(f'\nCompleted in {(time.time() - processing_start) / 60:.2f} minutes.')
     print(f'\nResults saved in {results_dir}')
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+'''
+h = h_offset + mask_p[0] - edge_block_size // 2
+if h < 0:
+    x = mask_p[0]
+    h = 0
+    h_end = edge_block_size
+else:
+    x = edge_block_size // 2
+    h_end = h + edge_block_size
+    if h_end > H:
+        x -= (h_end - H)
+        h = H - edge_block_size
+        h_end = H-1
+w = w_offset + mask_p[1] - edge_block_size // 2
+if w < 0:
+    y = mask_p[1]
+    w = 0
+    w_end = edge_block_size
+else:
+    y = edge_block_size // 2
+    w_end = w + edge_block_size
+    if w_end > W:
+        y -= (w_end - W)
+        w = W - edge_block_size
+        w_end = W-1
+block = binary_thresh[h:h_end, w:w_end]
+flood_pt = (x, y)
+# print(block[flood_pt[0]-1:flood_pt[0]+2, flood_pt[1]-1:flood_pt[1]+2])
+# simple sanity check that our indexing isn't off by 1
+print(flood_pt)
+assert block[flood_pt] == 1 
+c_mask = flood(block, flood_pt, footprint=square(3))
+_c_mask = np.argwhere(c_mask)
+c_mask = []
+for x,y in _c_mask:
+    c_mask.append([x+h, y+w])
+'''
