@@ -348,8 +348,8 @@ if __name__ == "__main__":
     n_proc = 3
     img_pool = mp.Pool(n_proc)
     
-    r_threshold = 300 
-    g_threshold = 300
+    r_threshold = 500 
+    g_threshold = 500
     for ch1, ch2 in zip(tifs[::2], tifs[1::2]):
         err_txt = "filename structure violated"
         assert ch1[-5] == '1' and ch2[-5] == '2', err_txt
