@@ -98,7 +98,8 @@ def combine_CSVs(results_dir):
         main_writer.writerows(rows)
 
 # processes subsets of the images in parallel processes
-def block_worker(b, q, h_offset, w_offset, size_thresh):
+def block_worker(b, c, h_offset, w_offset, size_thresh):
+    # b == image block; c == clusters list, offsets wrt full image
     sq = square(3)
     H, W = b.shape
     
@@ -108,15 +109,13 @@ def block_worker(b, q, h_offset, w_offset, size_thresh):
             if b[h, w] != 0:
                 cluster_mask = flood(b, (h, w), footprint=sq)                    
                 b[cluster_mask == True] = 0
-                # q.put(['edge', cluster_mask, h_offset, w_offset])
-                q.append(['edge', cluster_mask, h_offset, w_offset])
+                c.append(['edge', cluster_mask, h_offset, w_offset])
     for w in range(W):
         for h in [0, -1]:
             if b[h, w] != 0:
                 cluster_mask = flood(b, (h, w), footprint=sq)                    
                 b[cluster_mask == True] = 0
-                # q.put(['edge', cluster_mask, h_offset, w_offset])
-                q.append(['edge', cluster_mask, h_offset, w_offset])
+                c.append(['edge', cluster_mask, h_offset, w_offset])
     
     # cheeky little trick to 4X the speed
     for h in range(0, H, 4):
@@ -131,10 +130,8 @@ def block_worker(b, q, h_offset, w_offset, size_thresh):
                 # filter by size
                 if cluster_size >= size_thresh:
                     # record the current cluster
-                    # q.put(['normal', cluster_mask, h_offset, w_offset])
-                    q.append(['normal', cluster_mask, h_offset, w_offset])
-                     
-    return # end `def block_worker`
+                    c.append(['normal', cluster_mask, h_offset, w_offset])
+    return c # end `def block_worker`
 
 def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     # Separate red (PSD95) and green (synaptotagmin 1) channels.
@@ -186,12 +183,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     binary_thresh = red.copy()
     binary_thresh[binary_thresh > 0] = 1
     
-    # process each image block simultaneously in parallel processes
-    # n_proc = 4 
-    # block_pool = mp.Pool(n_proc)
-    # q = mp.Manager().Queue()
-    q = []
-    
+    clusters = []
     H, W = red.shape 
     # for refining clusters that were found on the edge of a main_block
     for h in range(0, H, block_size):
@@ -200,13 +192,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
                                   w:w+block_size].copy()
             # skip any that are blank (i.e. pure black, not signal)
             if block.sum() == 0: continue
-            # args = [block, q, h, w, size_thresh]
-            # block_pool.apply_async(func=block_worker, args=args, error_callback=ecb)
-            block_worker(block, q, h, w, size_thresh)
-            
-    # block_pool.close()
-    # block_pool.join()
-    # del block_pool
+            clusters = block_worker(block, clusters, h, w, size_thresh)
     
     gain = 3
     norm_red = og_red / og_red.max()
@@ -217,10 +203,6 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     viz_clusters = np.zeros_like(binary_thresh)
     colors = [x / 8 for x in range(1, 9)]
     
-    # get queue items
-    # clusters = [q.get_nowait() for _ in range(q.qsize())]
-    # del q
-    clusters = q
     print(f"\n{len(clusters)} clusters unfiltered!\n")
     edge_masks = []
     i = -1 # allows incrementing at the beginning of loop
@@ -330,9 +312,9 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     ax[1,1].set_title('original')
     ax[0,0].imshow(binary_thresh, cmap='gray')
     ax[0,0].set_title('binary thresholding')
-    jet = plt.get_cmap('jet')
-    jet.set_bad(color='black')
-    ax[0,1].imshow(viz_clusters, cmap=jet, interpolation='none')
+    cmap = plt.get_cmap('gist_rainbow')
+    cmap.set_under('black')
+    ax[0,1].imshow(viz_clusters, cmap=cmap, interpolation='none', vmin=0.1)
     ax[0,1].set_title('clusters')
     ax[1,0].imshow(clusters_removed * gain)
     ax[1,0].set_title('clusters removed')
