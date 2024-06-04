@@ -6,6 +6,7 @@ import datetime
 import numpy as np
 import multiprocessing as mp
 import matplotlib.pyplot as plt
+from memory_profiler import profile
 from skimage.morphology import square
 from skimage.segmentation import flood
 
@@ -133,6 +134,7 @@ def block_worker(b, c, h_offset, w_offset, size_thresh):
                     c.append(['normal', cluster_mask, h_offset, w_offset])
     return c # end `def block_worker`
 
+# @profile
 def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     # Separate red (PSD95) and green (synaptotagmin 1) channels.
     # Saves images in results_dir.
@@ -141,7 +143,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     char_after_soma_count = ch1.find("_") + 1
     name_root = ch1[char_after_soma_count:-7]
     
-    size_thresh = 150
+    size_thresh = 155
     block_size = 500 # for block tiling
     edge_block_size = 990
     # avoids hitting the edges of the image
@@ -203,7 +205,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     viz_clusters = np.zeros_like(binary_thresh)
     colors = [x / 8 for x in range(1, 9)]
     
-    print(f"\n{len(clusters)} clusters unfiltered!\n")
+    # print(f"\n{len(clusters)} clusters unfiltered!\n")
     edge_masks = []
     i = -1 # allows incrementing at the beginning of loop
     # save cluster results in individual csv files too
@@ -217,7 +219,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
         while clusters:
             i += 1
             c = clusters.pop()
-            print(f'putative cluster #{i}')
+            # print(f'putative cluster #{i}')
             c_type = c[0]
             c_mask = c[1]
             h_offset = c[2]
@@ -308,22 +310,21 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     fig, ax = plt.subplots(nrows=2, ncols=2)
     fig.set_figheight(15)
     fig.set_figwidth(15)
-    ax[1,1].imshow(original * gain)
-    ax[1,1].set_title('original')
-    ax[0,0].imshow(binary_thresh, cmap='gray')
-    ax[0,0].set_title('binary thresholding')
+    ax[0,0].imshow(original * gain)
+    ax[0,0].set_title('original')
+    ax[1,0].imshow(binary_thresh, cmap='gray')
+    ax[1,0].set_title('binary thresholding')
     cmap = plt.get_cmap('gist_rainbow')
     cmap.set_under('black')
-    ax[0,1].imshow(viz_clusters, cmap=cmap, interpolation='none', vmin=0.1)
-    ax[0,1].set_title('clusters')
-    ax[1,0].imshow(clusters_removed * gain)
-    ax[1,0].set_title('clusters removed')
+    ax[1,1].imshow(viz_clusters, cmap=cmap, interpolation='none', vmin=0.1)
+    ax[1,1].set_title('clusters')
+    ax[0,1].imshow(clusters_removed * gain)
+    ax[0,1].set_title('clusters removed')
     
     cluster_img_path = f'{name_root}.png'
     cluster_img_path = os.path.join(results_dir, cluster_img_path)
     plt.savefig(cluster_img_path, dpi=300)
     plt.close(fig) # prevent plotting huge figures inline
-
     return # end `def img_worker`
 
 
@@ -334,10 +335,6 @@ if __name__ == "__main__":
     err_txt = 'Your current directory contains no TIF images :('
     assert len(tifs) > 0, err_txt
     
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-    results_dir = os.path.join(tif_dir, 'results', timestamp)
-    os.makedirs(results_dir, exist_ok=True)
-    
     processing_start = time.time()
     
     try:
@@ -345,17 +342,21 @@ if __name__ == "__main__":
     except:
         pass
     
-    n_proc = 3
+    n_proc = 6
     img_pool = mp.Pool(n_proc)
     
-    r_threshold = 500 
-    g_threshold = 500
-    for ch1, ch2 in zip(tifs[::2], tifs[1::2]):
-        err_txt = "filename structure violated"
-        assert ch1[-5] == '1' and ch2[-5] == '2', err_txt
-        assert ch1[:-5] == ch2[:-5], err_txt
-        args = [ch1, ch2, results_dir, r_threshold, g_threshold]
-        img_pool.apply_async(func=img_worker, args=args, error_callback=ecb)
+    # thresh_search = []
+    for r_threshold, g_threshold in [[515, 350]]:
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+        timestamp += f'_{r_threshold}_{g_threshold}'
+        results_dir = os.path.join(tif_dir, 'results', timestamp)
+        os.makedirs(results_dir, exist_ok=True)
+        for ch1, ch2 in zip(tifs[::2], tifs[1::2]):
+            err_txt = "filename structure violated"
+            assert ch1[-5] == '1' and ch2[-5] == '2', err_txt
+            assert ch1[:-5] == ch2[:-5], err_txt
+            args = [ch1, ch2, results_dir, r_threshold, g_threshold]
+            img_pool.apply_async(func=img_worker, args=args, error_callback=ecb)
     
     img_pool.close()
     img_pool.join()
