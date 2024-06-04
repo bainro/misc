@@ -56,4 +56,4 @@ xticks = list(range(0, max_k, 4))
 plt.xticks(xticks, xticks)
 plt.legend()
 plt.show()
-    
+plt.savefig("results.png")
