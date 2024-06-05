@@ -60,23 +60,29 @@ def combine_CSVs(results_dir):
         n_clusters = len(clusters)
         rows[-1].append(n_clusters)
         
-        total_psd = 0
-        total_syn = 0
-        total_size = 0
+        PSDs = np.array([])
+        SYNs = np.array([])
+        SIZEs = np.array([])
         # c = [cluster id, size, psd, syn]
         for i, c in enumerate(clusters):
             cluster_size = int(c[1])
-            total_size += cluster_size
-            total_psd += float(c[2]) * cluster_size
-            total_syn += float(c[3]) * cluster_size
+            SIZEs.append(cluster_size)
+            PSDs.append(float(c[2]) * cluster_size)
+            SYNs.append(float(c[3]) * cluster_size)
         
         # Avg pixel values over all clusters in a given image
-        avg_psd = total_psd / total_size
-        avg_syn = total_syn / total_size
-        avg_size = total_size / n_clusters
+        avg_psd = PSDs.sum() / SIZEs.sum()
+        median_psd = PSDs.median()
+        avg_syn = SYNs.sum() / SIZEs.sum()
+        median_syn = SYNs.median()
+        avg_size = SIZEs.sum() / n_clusters
+        median_size = SIZEs.median()
         rows[-1].append(avg_size)
+        rows[-1].append(median_size)
         rows[-1].append(avg_psd)
+        rows[-1].append(median_psd)
         rows[-1].append(avg_syn)
+        rows[-1].append(median_syn)
         
         pyr_cell_count = int(ch1[:ch1.find("_")])
         rows[-1].append(pyr_cell_count)
@@ -92,8 +98,8 @@ def combine_CSVs(results_dir):
     with open(combined_csv, 'w') as main_csv_file:
         main_writer = csv.writer(main_csv_file)
         header = [
-            'Name', '# Clusters', 'Avg Size', 'Avg PSD',
-            'Avg Syn1', '# Cells', 'Entire curved area (pixels)'
+            'Name', '# Clusters', 'Mean Size', 'Median Size', 'Mean PSD', 'Median PSD',
+            'Mean Syn1', 'Median Syn1', '# Cells', 'Entire curved area (pixels)'
         ]
         main_writer.writerow(header)
         main_writer.writerows(rows)
@@ -342,7 +348,7 @@ if __name__ == "__main__":
     except:
         pass
     
-    n_proc = 6
+    n_proc = 5
     img_pool = mp.Pool(n_proc)
     
     # thresh_search = []
