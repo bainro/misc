@@ -6,10 +6,14 @@ import datetime
 import numpy as np
 import multiprocessing as mp
 import matplotlib.pyplot as plt
-from memory_profiler import profile
 from skimage.morphology import square
 from skimage.segmentation import flood
 
+'''
+from sklearn.neighbors import kneighbors_graph
+A = kneighbors_graph(X, 2, mode='distance', n_jobs=2)
+A.toarray()
+'''
 
 tif_dir = os.getcwd()
 
@@ -60,29 +64,23 @@ def combine_CSVs(results_dir):
         n_clusters = len(clusters)
         rows[-1].append(n_clusters)
         
-        PSDs = np.array([])
-        SYNs = np.array([])
-        SIZEs = np.array([])
-        # c = [cluster id, size, psd, syn]
+        total_psd = 0
+        total_syn = 0
+        total_size = 0
+        # c = [cluster id, size, psd, syn, c_x, c_y]
         for i, c in enumerate(clusters):
             cluster_size = int(c[1])
-            SIZEs.append(cluster_size)
-            PSDs.append(float(c[2]) * cluster_size)
-            SYNs.append(float(c[3]) * cluster_size)
+            total_size += cluster_size
+            total_psd += float(c[2]) * cluster_size
+            total_syn += float(c[3]) * cluster_size
         
         # Avg pixel values over all clusters in a given image
-        avg_psd = PSDs.sum() / SIZEs.sum()
-        median_psd = PSDs.median()
-        avg_syn = SYNs.sum() / SIZEs.sum()
-        median_syn = SYNs.median()
-        avg_size = SIZEs.sum() / n_clusters
-        median_size = SIZEs.median()
+        avg_psd = total_psd / total_size
+        avg_syn = total_syn / total_size
+        avg_size = total_size / n_clusters
         rows[-1].append(avg_size)
-        rows[-1].append(median_size)
         rows[-1].append(avg_psd)
-        rows[-1].append(median_psd)
         rows[-1].append(avg_syn)
-        rows[-1].append(median_syn)
         
         pyr_cell_count = int(ch1[:ch1.find("_")])
         rows[-1].append(pyr_cell_count)
@@ -98,8 +96,8 @@ def combine_CSVs(results_dir):
     with open(combined_csv, 'w') as main_csv_file:
         main_writer = csv.writer(main_csv_file)
         header = [
-            'Name', '# Clusters', 'Mean Size', 'Median Size', 'Mean PSD', 'Median PSD',
-            'Mean Syn1', 'Median Syn1', '# Cells', 'Entire curved area (pixels)'
+            'Name', '# Clusters', 'Avg Size', 'Avg PSD',
+            'Avg Syn1', '# Cells', 'Entire curved area (pixels)'
         ]
         main_writer.writerow(header)
         main_writer.writerows(rows)
@@ -140,7 +138,6 @@ def block_worker(b, c, h_offset, w_offset, size_thresh):
                     c.append(['normal', cluster_mask, h_offset, w_offset])
     return c # end `def block_worker`
 
-# @profile
 def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     # Separate red (PSD95) and green (synaptotagmin 1) channels.
     # Saves images in results_dir.
@@ -149,7 +146,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     char_after_soma_count = ch1.find("_") + 1
     name_root = ch1[char_after_soma_count:-7]
     
-    size_thresh = 155
+    size_thresh = 150
     block_size = 500 # for block tiling
     edge_block_size = 990
     # avoids hitting the edges of the image
@@ -219,7 +216,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     # writing to csv file
     with open(csv_name, 'w') as csv_file:
         writer = csv.writer(csv_file)
-        header = ['Cluster ID', 'Size', 'Avg PSD', 'Avg Syn1']
+        header = ['Cluster ID', 'Size', 'Mean PSD', 'Mean Syn1', 'Mean x', 'Mean y']
         writer.writerow(header)
         num_rows = 0
         while clusters:
@@ -233,7 +230,11 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
             assert len(c_mask) > 0
             # reapply flood centered on each edge cluster
             if c_type == 'normal':
-                for h, w in np.argwhere(c_mask):
+                pts = np.argwhere(c_mask)
+                c_x = pts[:,0].mean() + h_offset
+                c_y = pts[:,1].mean() + w_offset
+                # viz_clusters[int(c_x)-7:int(c_x)+8, int(c_y)-7:int(c_y)+8] = 1
+                for h, w in pts:
                     pt = (h + h_offset, w + w_offset)
                     viz_clusters[pt] = colors[num_rows % len(colors)]
                     clusters_removed[pt] = 0
@@ -246,7 +247,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
                 green_block = og_green[h_offset:h_end, w_offset:w_end]
                 cluster_syn = green_block[c_mask == True]
                 avg_syn = cluster_syn.mean()
-                writer.writerow([num_rows, size, avg_psd, avg_syn])
+                writer.writerow([num_rows, size, avg_psd, avg_syn, c_x, c_y])
                 num_rows += 1
             elif c_type == 'edge':            
                 mask_p = np.argwhere(c_mask)[0]
@@ -299,6 +300,15 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
                             break
                     if is_new:
                         edge_masks.append(c_mask)
+                        c_x = np.array(c_mask)[:,0].mean()
+                        c_y = np.array(c_mask)[:,1].mean()
+                        '''
+                        try:
+                            viz_clusters[int(c_x)-7:int(c_x)+8, int(c_y)-7:int(c_y)+8] = 1
+                            pass
+                        except:
+                            print('probably an indexing error at the edge :)')
+                        '''
                         cluster_psd = 0
                         cluster_syn = 0
                         for x,y in c_mask:
@@ -308,7 +318,7 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
                             cluster_syn += og_green[x,y]
                         avg_psd = cluster_psd / size
                         avg_syn = cluster_syn / size
-                        writer.writerow([num_rows, size, avg_psd, avg_syn])
+                        writer.writerow([num_rows, size, avg_psd, avg_syn, c_x, c_y])
                         num_rows += 1
 
     del edge_masks
@@ -316,21 +326,22 @@ def img_worker(ch1, ch2, results_dir, r_threshold, g_threshold):
     fig, ax = plt.subplots(nrows=2, ncols=2)
     fig.set_figheight(15)
     fig.set_figwidth(15)
-    ax[0,0].imshow(original * gain)
-    ax[0,0].set_title('original')
-    ax[1,0].imshow(binary_thresh, cmap='gray')
-    ax[1,0].set_title('binary thresholding')
+    ax[1,1].imshow(original * gain)
+    ax[1,1].set_title('original')
+    ax[0,0].imshow(binary_thresh, cmap='gray')
+    ax[0,0].set_title('binary thresholding')
     cmap = plt.get_cmap('gist_rainbow')
     cmap.set_under('black')
-    ax[1,1].imshow(viz_clusters, cmap=cmap, interpolation='none', vmin=0.1)
-    ax[1,1].set_title('clusters')
-    ax[0,1].imshow(clusters_removed * gain)
-    ax[0,1].set_title('clusters removed')
+    ax[0,1].imshow(viz_clusters, cmap=cmap, interpolation='none', vmin=0.1)
+    ax[0,1].set_title('clusters')
+    ax[1,0].imshow(clusters_removed * gain)
+    ax[1,0].set_title('clusters removed')
     
     cluster_img_path = f'{name_root}.png'
     cluster_img_path = os.path.join(results_dir, cluster_img_path)
     plt.savefig(cluster_img_path, dpi=300)
     plt.close(fig) # prevent plotting huge figures inline
+
     return # end `def img_worker`
 
 
@@ -341,6 +352,10 @@ if __name__ == "__main__":
     err_txt = 'Your current directory contains no TIF images :('
     assert len(tifs) > 0, err_txt
     
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    results_dir = os.path.join(tif_dir, 'results', timestamp)
+    os.makedirs(results_dir, exist_ok=True)
+    
     processing_start = time.time()
     
     try:
@@ -348,21 +363,17 @@ if __name__ == "__main__":
     except:
         pass
     
-    n_proc = 5
+    n_proc = 3
     img_pool = mp.Pool(n_proc)
     
-    # thresh_search = []
-    for r_threshold, g_threshold in [[515, 350]]:
-        timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        timestamp += f'_{r_threshold}_{g_threshold}'
-        results_dir = os.path.join(tif_dir, 'results', timestamp)
-        os.makedirs(results_dir, exist_ok=True)
-        for ch1, ch2 in zip(tifs[::2], tifs[1::2]):
-            err_txt = "filename structure violated"
-            assert ch1[-5] == '1' and ch2[-5] == '2', err_txt
-            assert ch1[:-5] == ch2[:-5], err_txt
-            args = [ch1, ch2, results_dir, r_threshold, g_threshold]
-            img_pool.apply_async(func=img_worker, args=args, error_callback=ecb)
+    r_threshold = 500 
+    g_threshold = 500
+    for ch1, ch2 in zip(tifs[::2], tifs[1::2]):
+        err_txt = "filename structure violated"
+        assert ch1[-5] == '1' and ch2[-5] == '2', err_txt
+        assert ch1[:-5] == ch2[:-5], err_txt
+        args = [ch1, ch2, results_dir, r_threshold, g_threshold]
+        img_pool.apply_async(func=img_worker, args=args, error_callback=ecb)
     
     img_pool.close()
     img_pool.join()
