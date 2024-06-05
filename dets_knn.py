@@ -1,6 +1,5 @@
 import os
 import csv
-import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.neighbors import kneighbors_graph
