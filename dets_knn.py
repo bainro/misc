@@ -35,8 +35,11 @@ if __name__ == "__main__":
                 # omit header & empty lines
                 if i == 0 or line == []:
                     continue
-                c_x, c_y = float(line[-2]), float(line[-1])
-                centers.append([c_x, c_y])
+                c_x, c_y = float(line[4]), float(line[5])
+                cluster_size = int(line[1])
+                n_subclusters = cluster_size // 200
+                for _ in range(n_subclusters):
+                    centers.append([c_x, c_y])
             
         mean_distances = []
         k_s = range(1, max_k)
