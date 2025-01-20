@@ -17,30 +17,39 @@ class Autoencoder(nn.Module):
         super(Autoencoder, self).__init__()
         # Encoder: Convolutional layers
         self.encoder = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),  # (B, 3, H, W) -> (B, 32, H/2, W/2)
+            nn.Conv2d(1, 8, kernel_size=3, stride=2, padding=1),  # (B, 3, H, W) -> (B, 32, H/2, W/2)
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=0),  # Downsampling by 2 (B, 32, H/2, W/2)
+
+            nn.Conv2d(8, 16, kernel_size=3, stride=2, padding=1),  # (B, 3, H, W) -> (B, 32, H/2, W/2)
+            nn.ReLU(),
             
-            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # (B, 32, H/2, W/2) -> (B, 64, H/4, W/4)
+            nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1),  # (B, 32, H/2, W/2) -> (B, 64, H/4, W/4)
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=0),  # Downsampling by 2 (B, 64, H/4, W/4)
             
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1),  # (B, 64, H/4, W/4) -> (B, 128, H/8, W/8)
+            nn.Conv2d(32, 48, kernel_size=3, stride=2, padding=1),  # (B, 64, H/4, W/4) -> (B, 128, H/8, W/8)
             nn.ReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2, padding=0)  # Downsampling by 2 (B, 128, H/8, W/8)
+
+            nn.Conv2d(48, 64, kernel_size=3, stride=2, padding=1),  # (B, 64, H/4, W/4) -> (B, 128, H/8, W/8)
+            nn.ReLU(),
+
             #nn.Linear(128*16*16, 100)
         )
-        
         # Decoder: Transposed Convolutional layers (deconvolution)
         self.decoder = nn.Sequential(
             #nn.Linear(100, 128*16*16)
-            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 128, H/8, W/8) -> (B, 64, H/4, W/4)
+            nn.ConvTranspose2d(64, 48, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 128, H/8, W/8) -> (B, 64, H/4, W/4)
             nn.ReLU(),
             
-            nn.ConvTranspose2d(64, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 64, H/4, W/4) -> (B, 32, H/2, W/2)
+            nn.ConvTranspose2d(48, 32, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 64, H/4, W/4) -> (B, 32, H/2, W/2)
+            nn.ReLU(),
+
+            nn.ConvTranspose2d(32, 16, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 64, H/4, W/4) -> (B, 32, H/2, W/2)
+            nn.ReLU(),
+
+            nn.ConvTranspose2d(16, 8, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 64, H/4, W/4) -> (B, 32, H/2, W/2)
             nn.ReLU(),
             
-            nn.ConvTranspose2d(32, 1, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 32, H/2, W/2) -> (B, 3, H, W)
+            nn.ConvTranspose2d(8, 1, kernel_size=3, stride=2, padding=1, output_padding=1),  # (B, 32, H/2, W/2) -> (B, 3, H, W)
             nn.Sigmoid()  # Sigmoid activation to get output in [0, 1] range for image pixel values
         )
 
@@ -75,7 +84,7 @@ class IXI_Dataset(Dataset):
         
         return img
 
-ixi_dataset = IXI_Dataset(f"./IXI_dataset_2d/", transform=transform)
+ixi_dataset = IXI_Dataset(f"./IXI_dataset_2d_hires/", transform=transform)
 
 train_loader = DataLoader(ixi_dataset, batch_size=256, shuffle=True, num_workers=8)
 
@@ -84,12 +93,12 @@ model = Autoencoder()
 device = 'cuda:0'
 model.to(device)
 criterion = nn.MSELoss()
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 # Train the model
 best_loss = 1e8
 best_path = 'autoencoder.pth'
-num_epochs = 100
+num_epochs = 200
 for epoch in range(num_epochs):
     for i, images in enumerate(train_loader):
         images = images.to(device)
