@@ -301,10 +301,11 @@ class VQVAE(nn.Module):
 
     def forward(self, x):
         (z_quantized, dictionary_loss, commitment_loss, _) = self.quantize(x)
-        # print(f"z_quantized.shape: {z_quantized.shape}");assert False
+        # print(f"z_quantized.shape: {z_quantized.shape}")
         x_recon = self.decoder(z_quantized)
         return {
             "dictionary_loss": dictionary_loss,
             "commitment_loss": commitment_loss,
             "x_recon": x_recon,
+            #"z_quantized": z_quantized,
         }
