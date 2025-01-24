@@ -14,10 +14,10 @@ device = torch.device("cuda:0")
 use_ema = True
 model_args = {
     "in_channels": 1,
-    "num_hiddens": 128,
-    "num_downsampling_layers": 3,
-    "num_residual_layers": 3,
-    "num_residual_hiddens": 32,
+    "num_hiddens": 128, # number of feature maps / channels in some of the conv layers
+    "num_downsampling_layers": 3, # conv layers (1st) with stride=2, so reducing the # of outputs
+    "num_residual_layers": 3, # layers (2nd) with skip connections
+    "num_residual_hiddens": 32, # number of feature maps / channels for the other conv layers
     "embedding_dim": 1,
     "num_embeddings": 512,
     "use_ema": use_ema,
