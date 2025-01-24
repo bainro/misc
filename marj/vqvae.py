@@ -35,7 +35,8 @@ class ResidualStack(nn.Module):
     def forward(self, x):
         h = x
         for layer in self.layers:
-            h = h + layer(h)
+            # here's the skip connection!!!
+            h = h + layer(h) # the + here is a concatenation along the ch dim
 
         # ResNet V1-style.
         return torch.relu(h)
@@ -81,10 +82,11 @@ class Encoder(nn.Module):
                 in_channels=num_hiddens,
                 out_channels=num_hiddens,
                 kernel_size=3,
+                stride=1, # redundant since default is 1
                 padding=1,
             ),
         )
-        self.conv = conv
+        self.conv = conv # saves it to object itself, otherwise we would lose it when we leave the fx
         self.residual_stack = ResidualStack(
             num_hiddens, num_residual_layers, num_residual_hiddens
         )
@@ -279,6 +281,7 @@ class VQVAE(nn.Module):
             num_residual_layers,
             num_residual_hiddens,
         )
+        # think of this more as the first VQ layer. We're really only interested in changing the number of feat maps.
         self.pre_vq_conv = nn.Conv2d(
             in_channels=num_hiddens, out_channels=embedding_dim, kernel_size=1
         )
@@ -305,6 +308,6 @@ class VQVAE(nn.Module):
         return {
             "dictionary_loss": dictionary_loss,
             "commitment_loss": commitment_loss,
-            "x_recon": x_recon,
+            "x_recon": x_recon, # if x was our input image, x_recon is the decoder's fuzzy image output. "recon-structed"
             #"z_quantized": z_quantized,
         }
