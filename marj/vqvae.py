@@ -60,12 +60,11 @@ class Encoder(nn.Module):
                 out_channels = num_hiddens // 2
             elif downsampling_layer == 1:
                 (in_channels, out_channels) = (num_hiddens // 2, num_hiddens)
-
             else:
                 (in_channels, out_channels) = (num_hiddens, num_hiddens)
 
             conv.add_module(
-                f"down{downsampling_layer}",
+                f"down{downsampling_layer}", # f-string is naming the layer
                 nn.Conv2d(
                     in_channels=in_channels,
                     out_channels=out_channels,
