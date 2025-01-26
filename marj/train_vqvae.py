@@ -21,7 +21,7 @@ model_args = {
     "embedding_dim": 1,
     "num_embeddings": 512,
     "use_ema": use_ema,
-    "decay": 0.99,
+    "decay": 0.99,# controls the smoothing
     "epsilon": 1e-5,
 }
 model = VQVAE(**model_args).to(device)
@@ -37,7 +37,7 @@ class IXI_Dataset(Dataset):
     
     def __len__(self):
         # Return the number of samples (NIfTI files) in the dataset
-        return len(self.file_paths)
+        return len(self.file_paths) # pytorch dataloader with custom dataset, the dataset needs to have len and getitem fx
     
     def __getitem__(self, idx):
         img_path = self.file_paths[idx]
