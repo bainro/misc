@@ -234,7 +234,7 @@ class VectorQuantizer(nn.Module):
                 n_i_ts = encoding_one_hots.sum(0)
                 # Updated exponential moving average of the cluster counts.
                 # See Equation (6).
-                self.N_i_ts(n_i_ts)
+                self.N_i_ts(n_i_ts) # nits is the most recent value - this updates the avg
 
                 # Exponential moving average of the embeddings. See Equation (7).
                 embed_sums = flat_x.transpose(0, 1) @ encoding_one_hots
