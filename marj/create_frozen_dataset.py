@@ -11,10 +11,11 @@ from torchvision import datasets, transforms
 torch.manual_seed(42)
 
 # Initialize dataset.
-batch_size = 100 # needs to 100 or bigger!
+batch_size = 100
 train_dataset = datasets.ImageFolder('/home/rbain/Downloads/DogCats100', transform=transforms.Compose(
     [
-        transforms.Resize((224,224)),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5]),
     ]
@@ -22,7 +23,22 @@ train_dataset = datasets.ImageFolder('/home/rbain/Downloads/DogCats100', transfo
 train_loader = DataLoader(
     dataset=train_dataset,
     batch_size=batch_size,
-    shuffle=True,
+    shuffle=False,
+    num_workers=8,
+)
+
+test_dataset = datasets.ImageFolder('/home/rbain/Downloads/DogCatsTest', transform=transforms.Compose(
+    [
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
+        transforms.ToTensor(),
+        transforms.Normalize([0.5, 0.5, 0.5],[0.5, 0.5, 0.5]),
+    ]
+))
+test_loader = DataLoader(
+    dataset=test_dataset,
+    batch_size=batch_size,
+    shuffle=False,
     num_workers=8,
 )
 
@@ -43,9 +59,10 @@ model = VQVAE(**model_args).to(device)
 model_path = 'vqvae_cvd.pth'
 model.load_state_dict(torch.load(model_path))
 model.eval()
-save_dir = f"./DogsCats100_npy"
-os.makedirs(save_dir, exist_ok=True)
 with torch.no_grad():
+    j = 0
+    save_dir = f"./DogsCats100_npy"
+    os.makedirs(save_dir, exist_ok=True)
     for (batch_idx, train_tensors) in enumerate(train_loader):
         imgs = train_tensors[0].to(device)
         labels = train_tensors[1].numpy()
@@ -56,6 +73,26 @@ with torch.no_grad():
                 cat_or_dog = "cat"
             else:
                 cat_or_dog = "dog"
-            f = os.path.join(save_dir, f"{i:03d}_{cat_or_dog}.npy")
+            # store label in filename
+            f = os.path.join(save_dir, f"{j:03d}_{cat_or_dog}.npy")
             # The 2x28x28 output of the VQVAE's encoder!
             np.save(f, x[i])
+            j += 1
+    k = 0
+    save_dir = f"./DogsCatsTest_npy"
+    os.makedirs(save_dir, exist_ok=True)
+    for (batch_idx, test_tensors) in enumerate(test_loader):
+        imgs = test_tensors[0].to(device)
+        labels = test_tensors[1].numpy()
+        out = model(imgs)
+        x = out["z_quantized"].detach().cpu().numpy()
+        for i in range(x.shape[0]):
+            if labels[i] == 0:
+                cat_or_dog = "cat"
+            else:
+                cat_or_dog = "dog"
+            # store label in filename
+            f = os.path.join(save_dir, f"{k:03d}_{cat_or_dog}.npy")
+            # The 2x28x28 output of the VQVAE's encoder!
+            np.save(f, x[i])
+            k += 1

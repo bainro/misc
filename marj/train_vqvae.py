@@ -14,14 +14,14 @@ device = torch.device("cuda:0")
 use_ema = True
 model_args = {
     "in_channels": 1,
-    "num_hiddens": 128, # number of feature maps / channels in some of the conv layers
-    "num_downsampling_layers": 3, # conv layers (1st) with stride=2, so reducing the # of outputs
-    "num_residual_layers": 3, # layers (2nd) with skip connections
-    "num_residual_hiddens": 32, # number of feature maps / channels for the other conv layers
-    "embedding_dim": 1,
+    "num_hiddens": 128,
+    "num_downsampling_layers": 3,
+    "num_residual_layers": 3,
+    "num_residual_hiddens": 32,
+    "embedding_dim": 2,
     "num_embeddings": 512,
     "use_ema": use_ema,
-    "decay": 0.99,# controls the smoothing
+    "decay": 0.99,
     "epsilon": 1e-5,
 }
 model = VQVAE(**model_args).to(device)
@@ -37,7 +37,7 @@ class IXI_Dataset(Dataset):
     
     def __len__(self):
         # Return the number of samples (NIfTI files) in the dataset
-        return len(self.file_paths) # pytorch dataloader with custom dataset, the dataset needs to have len and getitem fx
+        return len(self.file_paths)
     
     def __getitem__(self, idx):
         img_path = self.file_paths[idx]
@@ -93,10 +93,11 @@ train_params = [params for params in model.parameters()]
 optimizer = optim.Adam(train_params, lr=lr)
 criterion = nn.MSELoss()
 
-best_path = 'vqvae_morer_compressed.pth'
+best_path = 'test.pth' # 'vqvae_morer_compressed.pth'
+#model.load_state_dict(torch.load(best_path))
 #'''
 # Train model.
-epochs = 30
+epochs = 100
 eval_every = 100
 best_train_loss = float("inf")
 model.train()
@@ -145,7 +146,7 @@ def save_img_tensors_as_grid(img_tensors, nrows, f):
     # assumes square images!
     img_size = imgs.shape[-1]
     ncols = batch_size // nrows
-    if f == 'recon':
+    if 'recon' in f:
         img_arr = np.zeros((3, nrows * img_size, ncols * img_size))
     else:
         img_arr = np.zeros((1, nrows * img_size, ncols * img_size))
@@ -157,7 +158,7 @@ def save_img_tensors_as_grid(img_tensors, nrows, f):
         col_start = col_idx * img_size
         col_end = col_start + img_size
         img_arr[:, row_start:row_end, col_start:col_end] = imgs[idx]
-        if f == 'recon':
+        if 'recon' in f:
             # change from [ch,x,y] -> [x,y,ch]
             i = img_arr.transpose(1,2,0)
             Image.fromarray(i.astype(np.uint8), "RGB").save(f"{f}.jpg")
@@ -172,8 +173,12 @@ model.eval()
 with torch.no_grad():
     for imgs in train_loader:
         break
+    
+    n_rows = 8
+    save_img_tensors_as_grid(imgs, n_rows, "true")
+    inference = model(imgs.to(device))["x_recon"]
+    save_img_tensors_as_grid(inference, n_rows, "recon")
 
-    '''
     # for invidRobotics only
     imgs = nib.load("./1.nii.gz")
     imgs = imgs.get_fdata()
@@ -193,9 +198,6 @@ with torch.no_grad():
     imgs = torch.tensor(imgs.transpose(1,0,2,3)).float()
 
     imgs = imgs / imgs.max() # normalize between 0 & 1
-    '''
-    
-    n_rows = 8
-    save_img_tensors_as_grid(imgs, n_rows, "true")
+    save_img_tensors_as_grid(imgs, n_rows, "true_IR")
     inference = model(imgs.to(device))["x_recon"]
-    save_img_tensors_as_grid(inference, n_rows, "recon")
+    save_img_tensors_as_grid(inference, n_rows, "recon_IR")

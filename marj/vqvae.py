@@ -35,8 +35,7 @@ class ResidualStack(nn.Module):
     def forward(self, x):
         h = x
         for layer in self.layers:
-            # here's the skip connection!!!
-            h = h + layer(h) # the + here is a concatenation along the ch dim
+            h = h + layer(h)
 
         # ResNet V1-style.
         return torch.relu(h)
@@ -61,11 +60,12 @@ class Encoder(nn.Module):
                 out_channels = num_hiddens // 2
             elif downsampling_layer == 1:
                 (in_channels, out_channels) = (num_hiddens // 2, num_hiddens)
+
             else:
                 (in_channels, out_channels) = (num_hiddens, num_hiddens)
 
             conv.add_module(
-                f"down{downsampling_layer}", # f-string is naming the layer
+                f"down{downsampling_layer}",
                 nn.Conv2d(
                     in_channels=in_channels,
                     out_channels=out_channels,
@@ -82,11 +82,10 @@ class Encoder(nn.Module):
                 in_channels=num_hiddens,
                 out_channels=num_hiddens,
                 kernel_size=3,
-                stride=1, # redundant since default is 1
                 padding=1,
             ),
         )
-        self.conv = conv # saves it to object itself, otherwise we would lose it when we leave the fx
+        self.conv = conv
         self.residual_stack = ResidualStack(
             num_hiddens, num_residual_layers, num_residual_hiddens
         )
@@ -234,7 +233,7 @@ class VectorQuantizer(nn.Module):
                 n_i_ts = encoding_one_hots.sum(0)
                 # Updated exponential moving average of the cluster counts.
                 # See Equation (6).
-                self.N_i_ts(n_i_ts) # nits is the most recent value - this updates the avg
+                self.N_i_ts(n_i_ts)
 
                 # Exponential moving average of the embeddings. See Equation (7).
                 embed_sums = flat_x.transpose(0, 1) @ encoding_one_hots
@@ -281,7 +280,6 @@ class VQVAE(nn.Module):
             num_residual_layers,
             num_residual_hiddens,
         )
-        # think of this more as the first VQ layer. We're really only interested in changing the number of feat maps.
         self.pre_vq_conv = nn.Conv2d(
             in_channels=num_hiddens, out_channels=embedding_dim, kernel_size=1
         )
@@ -308,6 +306,6 @@ class VQVAE(nn.Module):
         return {
             "dictionary_loss": dictionary_loss,
             "commitment_loss": commitment_loss,
-            "x_recon": x_recon, # if x was our input image, x_recon is the decoder's fuzzy image output. "recon-structed"
+            "x_recon": x_recon,
             #"z_quantized": z_quantized,
         }
