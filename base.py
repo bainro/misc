@@ -1,5 +1,6 @@
 ### replaces phy2's file with the same name!
 
+
 # -*- coding: utf-8 -*-
 
 """Base controller to make clustering GUIs."""
@@ -1536,7 +1537,7 @@ class BaseController(object):
 
     def _make_spike_attributes_view(self, view_name, name, arr):
         """Create a special class deriving from ScatterView for each spike attribute."""
-        def coords(cluster_ids, load_all=False):
+        def coords(cluster_ids, load_all=False, overlay=False):
             n = self.n_spikes_amplitudes if not load_all else None
             bunchs = []
             num_clusters = len(cluster_ids)
@@ -1548,11 +1549,12 @@ class BaseController(object):
                     assert x.shape == y.shape == (len(spike_ids),)
                 elif arr.ndim >= 2:
                     x, y = arr[spike_ids, :2].T
-                    # round x to nearest-int to keep jitter scale
-                    x_int = np.rint(x).astype(np.int32)
-                    # display diff clusters side by side
-                    offset = x_int * num_clusters + i
-                    x = x + offset
+                    if not overlay:
+                        # round x to nearest-int to keep jitter scale
+                        x_int = np.rint(x).astype(np.int32)
+                        # display diff clusters side by side
+                        offset = x_int * num_clusters + i
+                        x = x + offset
                 bunchs.append(Bunch(x=x, y=y, spike_ids=spike_ids, data_bounds=None))
             return bunchs
 
