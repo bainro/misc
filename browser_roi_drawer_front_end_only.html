@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROI Drawer – Video-first (Front-End)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg:#0b0f14; --panel:#121820; --muted:#2b3542; --text:#e6eef8; --accent:#7dd3fc;
+      --good:#34d399; --warn:#fbbf24; --danger:#f87171; --line:#1f2937; --shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:linear-gradient(180deg,#0a0e13,#0c1219 50%,#0a0e13);color:var(--text);font:14px/1.4 Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    .app{display:grid;grid-template-columns:320px 1fr;gap:16px;padding:16px;height:100%}
+    .panel{background:var(--panel);border:1px solid var(--muted);border-radius:14px;box-shadow:var(--shadow)}
+    .left{display:flex;flex-direction:column;padding:14px}
+    .title{font-weight:700;font-size:16px;letter-spacing:.2px;margin-bottom:10px}
+    .subtle{color:#b6c2d1;font-size:12px}
+    .toolbar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0 12px}
+    .btn{padding:9px 10px;border-radius:10px;border:1px solid var(--muted);background:#0f151d;color:var(--text);cursor:pointer;text-align:center;font-weight:600;transition:.15s ease}
+    .btn:hover{border-color:#3b4656;transform:translateY(-1px)}
+    .btn.active{border-color:var(--accent);box-shadow:0 0 0 1px inset var(--accent)}
+    .btn.good{border-color:var(--good)} .btn.warn{border-color:var(--warn)} .btn.danger{border-color:var(--danger)}
+    .row{display:flex;gap:8px;align-items:center;margin:8px 0} .row .grow{flex:1}
+    input[type="text"],input[type="file"]{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--muted);background:#0f151d;color:var(--text)}
+    .divider{height:1px;background:var(--muted);margin:12px 0}
+    .roi-list{overflow:auto;min-height:140px;max-height:42vh;display:flex;flex-direction:column;gap:8px}
+    .roi-item{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:8px;border:1px solid var(--muted);border-radius:10px;background:#0f151d;cursor:pointer}
+    .roi-item.active{border-color:var(--accent);background:#101820}
+    .swatch{width:18px;height:18px;border-radius:4px;border:1px solid #0007}
+    .roi-label{font-weight:600} .roi-meta{font-size:11px;color:#9fb0c7}
+    .icon-btn{border:none;background:transparent;color:#9fb0c7;cursor:pointer;font-weight:700;padding:6px 8px}
+    .icon-btn:hover{color:var(--text)}
+
+    .stage{position:relative;display:flex;flex-direction:column}
+    .stage-top{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--muted)}
+    .stage-top .hint{margin-left:auto;color:#9fb0c7;font-size:12px}
+    .canvas-wrap{position:relative;flex:1;overflow:hidden;border-radius:14px}
+    .backdrop{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(1200px 600px at 50% 10%,#121a24,#0d141d);border-bottom-left-radius:14px;border-bottom-right-radius:14px}
+    .dropzone{border:2px dashed #304055;border-radius:12px;padding:18px 22px;color:#b6c2d1;text-align:center;max-width:560px}
+    .dropzone b{color:#e6eef8}
+    canvas{display:block;width:100%;height:100%;background:#0c1218}
+    video{display:none}
+    .overlay{position:absolute;top:10px;left:10px;background:#0c1218cc;border:1px solid var(--muted);border-radius:10px;padding:6px 10px;font-size:12px;color:#cfe2ff}
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;border:1px solid var(--muted);background:#0e1520}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--muted);background:#0b1118;padding:2px 6px;border-radius:6px;font-size:12px}
+    .footer{padding:10px 12px;border-top:1px solid var(--muted);color:#9fb0c7;font-size:12px;display:flex;gap:12px;align-items:center}
+    .hidden{display:none}
+    .player{display:flex;gap:8px;align-items:center}
+    .time{font-variant-numeric:tabular-nums}
+    input[type=range]{width:240px}
+    .disabled{opacity:.5;pointer-events:none}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- LEFT PANEL -->
+    <div class="panel left">
+      <div class="title">ROI Drawer <span class="subtle">(Video‑first)</span></div>
+
+      <div class="subtle">1) Load a video, 2) choose a tool, 3) draw ROIs. Export JSON when done.</div>
+
+      <div class="row" style="margin-top:10px;">
+        <input id="videoPicker" type="file" accept="video/*" />
+      </div>
+
+      <div class="toolbar">
+        <button class="btn active" id="toolPolygon" title="Polygon tool (click to add points, double‑click or Enter to finish)">Polygon</button>
+        <button class="btn" id="toolRect" title="Rectangle tool (click‑drag)">Rectangle</button>
+        <button class="btn" id="toolSelect" title="Select/Inspect (click inside ROI)">Select</button>
+      </div>
+
+      <div class="row">
+        <input id="roiLabel" type="text" placeholder="Label (auto if blank)" class="grow" />
+      </div>
+
+      <div class="row">
+        <button class="btn good grow" id="finishROI" title="Finish current ROI (or press Enter)">Finish ROI</button>
+        <button class="btn warn" id="undoPoint" title="Undo last point (Z)">Undo</button>
+        <button class="btn" id="cancelROI" title="Cancel current ROI (Esc)">Cancel</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row" style="justify-content:space-between;">
+        <div class="subtle">Defined ROIs</div>
+        <div class="subtle" id="roiCount">0</div>
+      </div>
+      <div class="roi-list" id="roiList"></div>
+
+      <div class="row">
+        <button class="btn danger grow" id="deleteROI" title="Delete selected ROI">Delete Selected</button>
+        <button class="btn" id="clearAll" title="Clear All ROIs">Clear All</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <button class="btn grow" id="importJSON">Import JSON</button>
+        <input id="importFile" type="file" accept="application/json" class="hidden" />
+        <button class="btn grow" id="exportJSON">Export JSON</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="subtle">
+        <b>Tips</b>:
+        <span class="chip"><span class="kbd">Space</span> play/pause</span>
+        <span class="chip"><span class="kbd">Enter</span> finish</span>
+        <span class="chip"><span class="kbd">Z</span> undo</span>
+        <span class="chip"><span class="kbd">Esc</span> cancel</span>
+        <span class="chip">Snap to first point to close</span>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL / STAGE -->
+    <div class="panel stage">
+      <div class="stage-top">
+        <div class="subtle">Tool: <b id="toolName">Polygon</b></div>
+        <div class="player" id="player" style="margin-left:16px;">
+          <button class="btn" id="playPause">Play</button>
+          <input id="seek" type="range" min="0" max="1" step="0.001" value="0" />
+          <span class="time" id="time">00:00 / 00:00</span>
+          <button class="btn" id="stepBack" title="-1/30s">◀︎</button>
+          <button class="btn" id="stepFwd" title="+1/30s">▶︎</button>
+        </div>
+        <div class="hint" id="hint">Load a video to begin</div>
+      </div>
+
+      <div class="canvas-wrap" id="canvasWrap">
+        <div class="backdrop" id="dropzone">
+          <div class="dropzone">
+            <div style="font-weight:700;font-size:18px;margin-bottom:6px;">Drop a video here</div>
+            <div>or use the file picker on the left.</div>
+            <div style="opacity:.9;margin-top:10px;">MP4 / WebM / Ogg</div>
+          </div>
+        </div>
+        <canvas id="canvas" width="1280" height="720"></canvas>
+        <video id="video" preload="metadata" playsinline muted></video>
+        <div class="overlay" id="overlayInfo" style="display:none;"></div>
+      </div>
+
+      <div class="footer">
+        <span>Pause to draw ROIs. Click to add polygon points, double‑click or <span class="kbd">Enter</span> to finish. Drag to draw rectangles. Click an ROI in the list to select.</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+$(function(){
+  // ---------------------- State ----------------------
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const wrap = $('#canvasWrap');
+  const dropzone = $('#dropzone');
+  const video = document.getElementById('video');
+  const $seek = $('#seek');
+  const $time = $('#time');
+  const $playPause = $('#playPause');
+
+  const MODES = { POLY:'polygon', RECT:'rect', SELECT:'select' };
+  let mode = MODES.POLY;
+
+  let mediaLoaded = false;
+  let rois = []; // {id,label,type,points:[{x,y}], color, visible:true}
+  let nextId = 1;
+  let selectedId = null;
+
+  // in-progress drawing
+  let draft = { active:false, type:MODES.POLY, points:[], rectStart:null, rectEnd:null };
+
+  // palette
+  const palette = ['#7dd3fc','#34d399','#fbbf24','#f472b6','#a78bfa','#60a5fa','#fb7185','#22d3ee','#a3e635','#f59e0b','#e879f9'];
+  const colorFor = i => palette[i % palette.length];
+
+  // ---------------------- Helpers ----------------------
+  function setMode(m){ mode = m; $('#toolName').text(cap(m)); $('.btn').removeClass('active'); if(m===MODES.POLY) $('#toolPolygon').addClass('active'); if(m===MODES.RECT) $('#toolRect').addClass('active'); if(m===MODES.SELECT) $('#toolSelect').addClass('active'); hint(); }
+  function cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  function canvasSizeToMedia(){ if(!mediaLoaded) return; const w = wrap.width(); const h = wrap.height(); canvas.width = w; canvas.height = h; }
+
+  function fitRect(){ const cw=canvas.width, ch=canvas.height, iw=video.videoWidth, ih=video.videoHeight; const scale=Math.min(cw/iw, ch/ih); const dw=iw*scale, dh=ih*scale; const dx=(cw-dw)/2, dy=(ch-dh)/2; return {scale,dx,dy}; }
+  function toCanvas(p){ const f=fitRect(); return { x: Math.round(f.dx + p.x*f.scale), y: Math.round(f.dy + p.y*f.scale) }; }
+  function toImage(p){ const f=fitRect(); return { x: (p.x - f.dx)/f.scale, y: (p.y - f.dy)/f.scale }; }
+
+  function rectToPoly(a,b){ return [ {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y)}, {x:Math.max(a.x,b.x),y:Math.min(a.y,b.y)}, {x:Math.max(a.x,b.x),y:Math.max(a.y,b.y)}, {x:Math.min(a.x,b.x),y:Math.max(a.y,b.y)} ]; }
+
+  function hint(){ const h = (mode===MODES.POLY)?'Polygon: click to add points, double‑click/Enter to finish':(mode===MODES.RECT)?'Rectangle: drag to draw, release to finish':'Select: click inside an ROI to select'; $('#hint').text(h); }
+  function metaText(){ return `<b>${video.videoWidth}×${video.videoHeight}</b> | ROIs: <b>${rois.length}</b> | Mode: <b>${cap(mode)}</b>`; }
+
+  function formatTime(t){ if(!isFinite(t)) return '00:00'; const m=Math.floor(t/60).toString().padStart(2,'0'); const s=Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`; }
+
+  // ---------------------- Rendering ----------------------
+  let hover=null; // {x,y} canvas coords
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if(!mediaLoaded) return;
+    const f=fitRect();
+    ctx.drawImage(video, f.dx, f.dy, video.videoWidth*f.scale, video.videoHeight*f.scale);
+
+    for(const roi of rois){
+      if(roi.visible===false) continue;
+      ctx.save();
+      ctx.lineWidth = 3; // thicker outline
+      ctx.strokeStyle = roi.color;
+      ctx.fillStyle = hexToRgba(roi.color, 0.18); // more visible fill
+      drawPoly(roi.points.map(p=>toCanvas(p)), true);
+
+      if(roi.id===selectedId){
+        ctx.strokeStyle='#fff';
+        ctx.setLineDash([6,4]);
+        drawPoly(roi.points.map(p=>toCanvas(p)), false);
+        ctx.setLineDash([]);
+      }
+      const c=centroid(roi.points.map(p=>toCanvas(p)));
+      ctx.font='600 14px Inter, sans-serif';
+      ctx.lineWidth=3;
+      ctx.strokeStyle='#000000';
+      ctx.strokeText(roi.label, c.x+6, c.y-6);
+      ctx.fillStyle='#ffffff';
+      ctx.fillText(roi.label, c.x+6, c.y-6);
+      ctx.restore();
+    }
+    // draw draft
+    if(draft.active){ ctx.save(); ctx.lineWidth=2; ctx.strokeStyle='#9fb0c7'; ctx.fillStyle='rgba(158,197,254,.08)'; if(draft.type===MODES.POLY){ const pts=draft.points.map(p=>toCanvas(p)); drawPoly(pts, false); for(const p of pts){ drawHandle(p.x,p.y);} if(hover){ const last=pts[pts.length-1]; if(last){ ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(hover.x,hover.y); ctx.stroke(); } } if(pts.length>0){ drawSnap(pts[0].x, pts[0].y);} } else if(draft.type===MODES.RECT && draft.rectStart && draft.rectEnd){ const a=toCanvas(draft.rectStart), b=toCanvas(draft.rectEnd); const poly=rectToPoly(a,b); drawPoly(poly, true);} ctx.restore(); }
+
+    $('#overlayInfo').html(mediaLoaded? metaText() : '').toggle(mediaLoaded);
+  }
+
+  function drawLoop(){ draw(); requestAnimationFrame(drawLoop); }
+  requestAnimationFrame(drawLoop);
+
+  function drawPoly(pts, fill){ if(pts.length<2) return; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y); for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].x, pts[i].y); if(fill && pts.length>=3){ ctx.closePath(); ctx.fill(); } ctx.stroke(); }
+  function drawHandle(x,y){ ctx.save(); ctx.fillStyle='#e6eef8'; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill(); ctx.restore(); }
+  function drawSnap(x,y){ ctx.save(); ctx.strokeStyle='#7dd3fc'; ctx.setLineDash([3,3]); ctx.beginPath(); ctx.arc(x,y,8,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); ctx.restore(); }
+  function centroid(pts){ const n=pts.length; if(!n) return {x:0,y:0}; let x=0,y=0; for(const p of pts){x+=p.x;y+=p.y;} return {x:x/n,y:y/n}; }
+  function hexToRgba(hex,a){ const c = hex.replace('#',''); const n = parseInt(c,16); const r=(n>>16)&255,g=(n>>8)&255,b=n&255; return `rgba(${r},${g},${b},${a})`; }
+
+  // ---------------------- Media Loading ----------------------
+  function loadVideoFile(file){ const url = URL.createObjectURL(file); video.src = url; video.load(); }
+
+  $('#videoPicker').on('change', e=>{ const f=e.target.files[0]; if(f) loadVideoFile(f); });
+
+  // Drag & drop
+  dropzone.on('dragover', e=>{ e.preventDefault(); dropzone.css('opacity','.9'); });
+  dropzone.on('dragleave', e=>{ e.preventDefault(); dropzone.css('opacity','1'); });
+  dropzone.on('drop', e=>{ e.preventDefault(); dropzone.css('opacity','1'); const f=e.originalEvent.dataTransfer.files[0]; if(f) loadVideoFile(f); });
+
+  video.addEventListener('loadedmetadata', ()=>{
+    mediaLoaded = true; dropzone.hide(); canvasSizeToMedia();
+    // set seek range based on duration
+    $seek.attr({min:0, max: video.duration || 1, step: 0.001});
+    updateTimeUI();
+  });
+
+  video.addEventListener('timeupdate', updateTimeUI);
+  function updateTimeUI(){ $seek.val(video.currentTime || 0); $time.text(`${formatTime(video.currentTime||0)} / ${formatTime(video.duration||0)}`); }
+
+  // ---------------------- Player Controls ----------------------
+  function togglePlay(){ if(!mediaLoaded) return; if(video.paused){ video.play(); $playPause.text('Pause'); disableDrawing(true); } else { video.pause(); $playPause.text('Play'); disableDrawing(false); } }
+  function disableDrawing(dis){ const toggles = ['#toolPolygon','#toolRect','#finishROI','#undoPoint','#cancelROI']; toggles.forEach(sel=> $(sel).toggleClass('disabled', dis)); $('#hint').text(dis? 'Playing… pause to draw' : 'Paused. Draw ROIs.'); }
+
+  $playPause.on('click', togglePlay);
+  $('#stepBack').on('click', ()=>{ if(!mediaLoaded) return; video.pause(); $playPause.text('Play'); video.currentTime = Math.max(0, video.currentTime - 1/30); });
+  $('#stepFwd').on('click', ()=>{ if(!mediaLoaded) return; video.pause(); $playPause.text('Play'); video.currentTime = Math.min(video.duration, video.currentTime + 1/30); });
+  $seek.on('input', function(){ if(!mediaLoaded) return; video.currentTime = parseFloat(this.value); });
+
+  $(window).on('keydown', e=>{ if(e.key===' '){ e.preventDefault(); togglePlay(); } });
+
+  // ---------------------- ROI List UI ----------------------
+  function refreshList(){ const list = $('#roiList').empty(); for(const roi of rois){ const item = $(`
+      <div class='roi-item' data-id='${roi.id}'>
+        <div class='swatch' style='background:${roi.color}'></div>
+        <div>
+          <div class='roi-label'>${escapeHtml(roi.label)}</div>
+          <div class='roi-meta'>${roi.type} • ${roi.points.length} pts</div>
+        </div>
+        <div><button class='icon-btn toggleVis' title='Toggle visibility'>${roi.visible===false? '🙈':'👁️'}</button></div>
+      </div>`); if(roi.id===selectedId) item.addClass('active'); list.append(item);} $('#roiCount').text(rois.length); }
+
+  $('#roiList').on('click', '.roi-item', function(){ selectedId = Number($(this).data('id')); refreshList(); });
+  $('#roiList').on('click', '.toggleVis', function(e){ e.stopPropagation(); const id = Number($(this).closest('.roi-item').data('id')); const r=rois.find(x=>x.id===id); r.visible = !r.visible; refreshList(); });
+
+  function addROI(obj){ rois.push(obj); selectedId = obj.id; refreshList(); }
+  function autoLabel(){ return `ROI-${nextId}`; }
+  function getLabel(){ const v = $('#roiLabel').val().trim(); return v || autoLabel(); }
+
+  // ---------------------- Drawing Interaction ----------------------
+  function onMouseMove(e){ if(!mediaLoaded) return; const rect = canvas.getBoundingClientRect(); const x=e.clientX-rect.left, y=e.clientY-rect.top; hover={x,y}; if(draft.active && draft.type===MODES.RECT && draft.rectStart){ draft.rectEnd = toImage(hover); } }
+  function onMouseDown(e){ if(!mediaLoaded || !video.paused) return; const pos = toImage(getMouse(e)); if(mode===MODES.POLY){ if(!draft.active){ draft={active:true,type:MODES.POLY,points:[pos]}; } else { const first = draft.points[0]; const dist = Math.hypot(toCanvas(first).x - hover.x, toCanvas(first).y - hover.y); if(draft.points.length>=3 && dist<10){ finishPolygon(); return; } draft.points.push(pos); } } else if(mode===MODES.RECT){ draft={active:true,type:MODES.RECT, rectStart:pos, rectEnd:pos}; } else if(mode===MODES.SELECT){ const hit = rois.find(r=> pointInPoly(pos, r.points)); if(hit){ selectedId = hit.id; refreshList(); } } }
+  function onMouseUp(e){ if(!mediaLoaded) return; if(draft.active && draft.type===MODES.RECT && draft.rectStart){ const a=draft.rectStart, b=draft.rectEnd; if(!a||!b) return cancelDraft(); const poly = rectToPoly(toCanvas(a), toCanvas(b)).map(p=>toImage(p)); finalizeROI({ type:'rect', points:poly }); } }
+  function onDblClick(e){ if(mode===MODES.POLY && draft.active) finishPolygon(); }
+
+  function finishPolygon(){ if(!draft.points || draft.points.length<3) return; finalizeROI({ type:'polygon', points:[...draft.points] }); }
+  function cancelDraft(){ draft={active:false,type:mode,points:[],rectStart:null,rectEnd:null}; }
+
+  function finalizeROI({type, points}){ const label = getLabel(); const roi = { id: nextId++, label, type, points: clampPoints(points), color: colorFor(rois.length), visible:true }; addROI(roi); $('#roiLabel').val(''); cancelDraft(); }
+
+  function clampPoints(pts){ return pts.map(p=>({ x: Math.max(0, Math.min(video.videoWidth-1, p.x)), y: Math.max(0, Math.min(video.videoHeight-1, p.y)) })); }
+  function getMouse(e){ const r=canvas.getBoundingClientRect(); return { x:e.clientX-r.left, y:e.clientY-r.top }; }
+
+  function pointInPoly(p, poly){ let inside=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const xi=poly[i].x, yi=poly[i].y, xj=poly[j].x, yj=poly[j].y; const intersect = ((yi>p.y)!=(yj>p.y)) && (p.x < (xj - xi) * (p.y - yi) / (yj - yi + 1e-9) + xi); if(intersect) inside = !inside; } return inside; }
+
+  // ---------------------- Actions ----------------------
+  $('#toolPolygon').on('click', ()=> setMode(MODES.POLY));
+  $('#toolRect').on('click', ()=> setMode(MODES.RECT));
+  $('#toolSelect').on('click', ()=> setMode(MODES.SELECT));
+
+  $('#finishROI').on('click', ()=> { if(mode===MODES.POLY && draft.active) finishPolygon(); });
+  $('#undoPoint').on('click', ()=> { if(draft.active && draft.type===MODES.POLY && draft.points.length>0){ draft.points.pop(); } });
+  $('#cancelROI').on('click', ()=> cancelDraft());
+
+  $('#deleteROI').on('click', ()=>{ if(selectedId==null) return; rois = rois.filter(r=>r.id!==selectedId); selectedId=null; refreshList(); });
+  $('#clearAll').on('click', ()=>{ rois=[]; selectedId=null; refreshList(); });
+
+  // Import / Export
+  $('#importJSON').on('click', ()=> $('#importFile').trigger('click'));
+  $('#importFile').on('change', (e)=>{ const f=e.target.files[0]; if(!f) return; const reader=new FileReader(); reader.onload=()=>{ try{ const data = JSON.parse(reader.result); if(!data.rois||!Array.isArray(data.rois)) throw new Error('Invalid JSON: missing rois[]'); rois = data.rois.map((r,i)=>({ id: r.id||i+1, label: r.label||`ROI-${i+1}`, type: r.type||'polygon', points: r.points.map(pt=>({x:pt[0]??pt.x, y:pt[1]??pt.y})), color: colorFor(i), visible:true })); nextId = Math.max(0, ...rois.map(r=>r.id))+1; selectedId = rois[0]?.id ?? null; refreshList(); }catch(err){ alert('Failed to import: '+err.message); } }; reader.readAsText(f); });
+  $('#exportJSON').on('click', ()=>{ if(!mediaLoaded){ alert('Load a video first.'); return; } const payload = { image_size: [video.videoWidth, video.videoHeight], source: '', rois: rois.map(r=>({ id:r.id, label:r.label, type:r.type, points: r.points.map(p=>[Math.round(p.x), Math.round(p.y)]) })) }; const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href=url; a.download='rois.json'; a.click(); URL.revokeObjectURL(url); });
+
+  // ---------------------- Keyboard Shortcuts ----------------------
+  $(window).on('keydown', (e)=>{ if(e.key==='Enter'){ if(mode===MODES.POLY && draft.active) { e.preventDefault(); finishPolygon(); } } if(e.key==='z'||e.key==='Z'){ if(draft.active && draft.type===MODES.POLY){ draft.points.pop(); } } if(e.key==='Escape'){ cancelDraft(); } if(e.key===' '){ e.preventDefault(); togglePlay(); } });
+
+  // ---------------------- Canvas Events ----------------------
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('dblclick', onDblClick);
+
+  // ---------------------- Resize Handling ----------------------
+  const resizeObserver = new ResizeObserver(()=>{ canvasSizeToMedia(); });
+  resizeObserver.observe(wrap[0]);
+
+  // ---------------------- Utils ----------------------
+  function escapeHtml(str){ return String(str).replace(/[&<>"]/g, s => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[s])); }
+});
+</script>
+</body>
+</html>
